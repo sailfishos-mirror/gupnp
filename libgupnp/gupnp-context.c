@@ -514,9 +514,6 @@ gupnp_context_get_server (GUPnPContext *context)
         priv = gupnp_context_get_instance_private (context);
 
         if (priv->server == NULL) {
-                const char *ip = NULL;
-                GSocketAddress *addr = NULL;
-                GInetAddress *inet_addr = NULL;
                 GError *error = NULL;
 
                 priv->server = soup_server_new (NULL, NULL);
@@ -527,31 +524,30 @@ gupnp_context_get_server (GUPnPContext *context)
                                          context,
                                          NULL);
 
-                ip = gssdp_client_get_host_ip (GSSDP_CLIENT (context));
-                inet_addr = gssdp_client_get_address (GSSDP_CLIENT (context));
-                guint port = gssdp_client_get_port (GSSDP_CLIENT (context));
-                if (g_inet_address_get_family (inet_addr) == G_SOCKET_FAMILY_IPV6 &&
-                    g_inet_address_get_is_link_local (inet_addr)) {
-                        guint scope =
-                                gssdp_client_get_index (GSSDP_CLIENT (context));
-                        addr = g_object_new (G_TYPE_INET_SOCKET_ADDRESS,
-                                             "address", inet_addr,
-                                             "port", port,
-                                             "scope-id", scope,
-                                             NULL);
-                } else {
-                        addr = g_inet_socket_address_new (inet_addr, port);
-                }
-                g_object_unref (inet_addr);
 
-                if (! soup_server_listen (priv->server,
-                                          addr, (SoupServerListenOptions) 0, &error)) {
+
+                g_autoptr (GSocket) socket =
+                        gssdp_client_get_tcp_socket (GSSDP_CLIENT (context));
+                GSocketAddress *a = g_socket_get_local_address (socket, NULL);
+                g_print("========> %u / %u\n", g_inet_socket_address_get_port (G_INET_SOCKET_ADDRESS (a)), gssdp_client_get_port(GSSDP_CLIENT(context)));
+                if (!g_socket_listen (socket, &error)) {
                         g_clear_object (&priv->server);
-                        g_warning ("Unable to listen on %s:%u %s", ip, port, error->message);
+                        g_warning ("Unable to listen on %s:unkown %s",
+                                   "addr",
+                                   error->message);
+                        g_error_free (error);
+                        return NULL;
+                }
+
+                if (!soup_server_listen_socket (
+                            priv->server,
+                            gssdp_client_get_tcp_socket (GSSDP_CLIENT (context)),
+                            (SoupServerListenOptions) 0,
+                            &error)) {
+                        g_clear_object (&priv->server);
+                        g_warning ("Unable to listen on %s:%u %s", "adddr", 0, error->message);
                         g_error_free (error);
                 }
-
-                g_object_unref (addr);
         }
 
         return priv->server;
