@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include <libsoup/soup.h>
+#include <libgssdp/gssdp-error.h>
 #include "libgupnp/gupnp.h"
 
 static GUPnPContext *
@@ -286,9 +287,10 @@ test_gupnp_context_error_when_bound ()
         g_clear_error (&error);
 
         g_test_expect_message (
-                "gupnp-context",
+                "gssdp-socket-source",
                 G_LOG_LEVEL_WARNING,
-                "*Unable to listen*");
+                "*Could not claim TCP socket*");
+
         GUPnPContext *context = g_initable_new (GUPNP_TYPE_CONTEXT,
                                                 NULL,
                                                 &error,
@@ -301,7 +303,8 @@ test_gupnp_context_error_when_bound ()
         g_slist_free_full (uris, (GDestroyNotify) g_uri_unref);
         g_object_unref (server);
         g_test_assert_expected_messages ();
-        g_assert_error (error, GUPNP_SERVER_ERROR, GUPNP_SERVER_ERROR_OTHER);
+        g_assert_nonnull (error);
+        g_assert_error (error, GSSDP_ERROR, GSSDP_ERROR_FAILED);
         g_assert_null (context);
         g_clear_error (&error);
 
@@ -314,9 +317,10 @@ test_gupnp_context_error_when_bound ()
                 address = g_uri_get_host (uris->data);
                 port = g_uri_get_port (uris->data);
 
-                g_test_expect_message ("gupnp-context",
+                g_test_expect_message ("gssdp-socket-source",
                                        G_LOG_LEVEL_WARNING,
-                                       "*Unable to listen*");
+                                       "*Could not claim TCP socket*");
+
                 context = g_initable_new (GUPNP_TYPE_CONTEXT,
                                           NULL,
                                           &error,
@@ -330,8 +334,8 @@ test_gupnp_context_error_when_bound ()
 
                 g_test_assert_expected_messages ();
                 g_assert_error (error,
-                                GUPNP_SERVER_ERROR,
-                                GUPNP_SERVER_ERROR_OTHER);
+                                GSSDP_ERROR,
+                                GSSDP_ERROR_FAILED);
                 g_assert_null (context);
                 g_clear_error (&error);
         }

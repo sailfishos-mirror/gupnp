@@ -352,6 +352,16 @@ gupnp_context_finalize (GObject *object)
 
 
 static void
+gupnp_context_constructed (GObject *object)
+{
+        g_object_set (object, "allocate-tcp-socket", TRUE, NULL);
+
+        /* Call super */
+        GObjectClass *object_class = G_OBJECT_CLASS (gupnp_context_parent_class);
+        object_class->constructed (object);
+}
+
+static void
 gupnp_context_class_init (GUPnPContextClass *klass)
 {
         GObjectClass *object_class;
@@ -362,6 +372,7 @@ gupnp_context_class_init (GUPnPContextClass *klass)
         object_class->get_property = gupnp_context_get_property;
         object_class->dispose      = gupnp_context_dispose;
         object_class->finalize     = gupnp_context_finalize;
+        object_class->constructed = gupnp_context_constructed;
 
         /**
          * GUPnPContext:server:(attributes org.gtk.Property.get=gupnp_context_get_server)
@@ -514,10 +525,7 @@ gupnp_context_get_server (GUPnPContext *context)
         priv = gupnp_context_get_instance_private (context);
 
         if (priv->server == NULL) {
-                const char *ip = NULL;
-                GSocketAddress *addr = NULL;
-                GInetAddress *inet_addr = NULL;
-                GError *error = NULL;
+                g_autoptr(GError) error = NULL;
 
                 priv->server = soup_server_new (NULL, NULL);
 
@@ -527,31 +535,27 @@ gupnp_context_get_server (GUPnPContext *context)
                                          context,
                                          NULL);
 
-                ip = gssdp_client_get_host_ip (GSSDP_CLIENT (context));
-                inet_addr = gssdp_client_get_address (GSSDP_CLIENT (context));
-                guint port = gssdp_client_get_port (GSSDP_CLIENT (context));
-                if (g_inet_address_get_family (inet_addr) == G_SOCKET_FAMILY_IPV6 &&
-                    g_inet_address_get_is_link_local (inet_addr)) {
-                        guint scope =
-                                gssdp_client_get_index (GSSDP_CLIENT (context));
-                        addr = g_object_new (G_TYPE_INET_SOCKET_ADDRESS,
-                                             "address", inet_addr,
-                                             "port", port,
-                                             "scope-id", scope,
-                                             NULL);
-                } else {
-                        addr = g_inet_socket_address_new (inet_addr, port);
-                }
-                g_object_unref (inet_addr);
 
-                if (! soup_server_listen (priv->server,
-                                          addr, (SoupServerListenOptions) 0, &error)) {
+
+                g_autoptr (GSocket) socket =
+                        gssdp_client_get_tcp_socket (GSSDP_CLIENT (context));
+
+                if (!g_socket_listen (socket, &error)) {
                         g_clear_object (&priv->server);
-                        g_warning ("Unable to listen on %s:%u %s", ip, port, error->message);
+                        g_warning ("Unable to listen: %s", error->message);
                         g_error_free (error);
+
+                        return NULL;
                 }
 
-                g_object_unref (addr);
+                if (!soup_server_listen_socket (
+                            priv->server,
+                            gssdp_client_get_tcp_socket (GSSDP_CLIENT (context)),
+                            (SoupServerListenOptions) 0,
+                            &error)) {
+                        g_clear_object (&priv->server);
+                        g_warning ("Unable to listen", error->message);
+                }
         }
 
         return priv->server;
