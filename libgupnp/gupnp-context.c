@@ -543,7 +543,6 @@ gupnp_context_get_server (GUPnPContext *context)
                 if (!g_socket_listen (socket, &error)) {
                         g_clear_object (&priv->server);
                         g_warning ("Unable to listen: %s", error->message);
-                        g_error_free (error);
 
                         return NULL;
                 }
