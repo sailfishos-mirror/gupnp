@@ -1458,9 +1458,13 @@ gupnp_acl_async_callback (GUPnPAcl *acl,
                           AclAsyncHandler *data)
 {
         gboolean allowed;
-        GError *error = NULL;
+        g_autoptr (GError) error = NULL;
 
         allowed = gupnp_acl_is_allowed_finish (acl, res, &error);
+        if (error != NULL) {
+                g_warning ("Checking ACL failed: %s", error->message);
+                allowed = FALSE;
+        }
 #if SOUP_CHECK_VERSION(3,1,2)
         soup_server_message_unpause (data->message);
 #else
@@ -1476,7 +1480,6 @@ gupnp_acl_async_callback (GUPnPAcl *acl,
                                          data->path,
                                          data->query,
                                          data->handler->user_data);
-
         acl_async_handler_free (data);
 }
 
